@@ -1,0 +1,1 @@
+Bicep Files for the Azure Container Apps Registry
