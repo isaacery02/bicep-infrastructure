@@ -11,6 +11,10 @@
   'northeurope'
 ])
 param location string = 'uksouth'
+@allowed([
+  'uks'
+  'ne'
+])
 param parprefix string = 'uks'
 param parHubVNET string = 'vnet-hub-uks'
 
@@ -58,7 +62,7 @@ resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
   }
 }
 
-resource keyVaultSecret 'Microsoft.KeyVault/vaults/secrets@2019-09-01' = {
+resource resContainerkeyVaultSecret 'Microsoft.KeyVault/vaults/secrets@2019-09-01' = {
   parent: keyVault
   name: 'acrAdminPassword'
   properties: {
@@ -72,8 +76,39 @@ resource logAnalyticsWorkspace 'Microsoft.OperationalInsights/workspaces@2020-10
   location: location
   properties: {
     sku: {
-      name: 'Standard'
+      name: 'PerGB2018'
     }
+    retentionInDays: 30
   }
 }
 
+resource containerEnv 'Microsoft.App/managedEnvironments@2023-05-01' = {
+  name: 'container-env-${parprefix}'
+  location: location
+  properties: {
+    vnetConfiguration: {
+    }
+    appLogsConfiguration: {
+      destination: 'log-analytics'
+      logAnalyticsConfiguration: {
+        customerId: logAnalyticsWorkspace.properties.customerId
+        sharedKey: logAnalyticsWorkspace.listkeys().primarySharedKey
+      }
+    }
+    workloadProfiles: [
+      {name:'Consumption'
+      workloadProfileType: 'consumption'}
+    ]
+  }
+}
+
+/******************
+* Output
+******************/
+
+output outContainerRegistryName string = containerRegistry.name
+output outContainerRegistryUser string = containerRegistry.name
+output outContainerRegistrySecretId string = resContainerkeyVaultSecret.id
+output outContainerRegistrySecretname string = resContainerkeyVaultSecret.name
+output outKeyVaultHubName string = keyVault.name
+output apiUrl string = containerEnv.properties.defaultDomain
