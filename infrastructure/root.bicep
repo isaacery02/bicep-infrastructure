@@ -21,7 +21,7 @@ resource refHubResourceGroup 'Microsoft.Resources/resourceGroups@2024-07-01' exi
 /*******************
 * Modules
 *******************/
-// Create Hub VNET NSG and Cosmos
+// Create Hub VNET NSG
 module modHubVNET 'core.bicep' = {
   scope: refHubResourceGroup
   name: 'HubCoreDeployment'
@@ -33,6 +33,19 @@ module modHubVNET 'core.bicep' = {
   }
 }
 
+
+// Create Cosmos DB
+module modCosmos 'cosmos.bicep' = {
+  scope: refHubResourceGroup
+  name: 'CosmosDeployment'
+  params: {
+    parlocation: parlocation
+    parprefix: parprefix
+    parHubVnet : modHubVNET.outputs.outvnethubName
+  }
+}
+
+/*
 // Create KV, Azure Container apps environment, LAW
 module modContainerApps 'containers.bicep' = {
   scope: refHubResourceGroup
@@ -51,6 +64,7 @@ module modAPM 'apm.bicep' = {
     prefix: modHubVNET.outputs.outLocationSuffix
   }
 }
+  */
 
 /******************
 * Output

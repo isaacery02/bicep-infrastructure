@@ -3,28 +3,48 @@
 * 
 *************/
 
-
 /*******************
 * Parameters
 *******************/
-
+@description('Location of the deployment')
+param parlocation string = 'uksouth'
+@allowed([
+  'uks'
+  'ne'
+])
+param parprefix string = 'uks'
+param parEnvironment string = 'Prod'
+param parLocationSuffix string = 'uks'
+param parHubVnet string
 
 /*******************
 * Variables
 *******************/
-
+var varTags = {
+  Environment: parEnvironment
+  Location: parprefix
+}
 
 /*******************
 * References
 *******************/
+resource refHubvirtualNetwork 'Microsoft.Network/virtualNetworks@2024-05-01' existing = {
+  name: parHubVnet
+}
 
+/*
+resource refPESubnet 'Microsoft.Network/virtualNetworks/subnets@2024-05-01' existing = {
+  name: 'subnetProdHub'
+  parent: refHubvirtualNetwork
+}
+*/
 
 /*******************
 * Modules
 *******************/
 resource resCosmosDbAccount 'Microsoft.DocumentDB/databaseAccounts@2021-03-15' = {
-  name: 'cos-hub-prod-${varLocationSuffix}'
-  location: location
+  name: 'cos-hub-prod-${parLocationSuffix}'
+  location: parlocation
   kind: 'GlobalDocumentDB'
   properties: {
     consistencyPolicy: {
@@ -32,7 +52,7 @@ resource resCosmosDbAccount 'Microsoft.DocumentDB/databaseAccounts@2021-03-15' =
     }
     locations: [
       {
-        locationName: location
+        locationName: parlocation
         failoverPriority: 0
       }
     ]
@@ -44,14 +64,15 @@ resource resCosmosDbAccount 'Microsoft.DocumentDB/databaseAccounts@2021-03-15' =
       }
     ]
   }
+  tags: varTags
 }
 
 resource resSqlDb 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases@2021-06-15' = {
   parent: resCosmosDbAccount
-    name: 'sqldb-cos-prod-${varLocationSuffix}'
+    name: 'sqldb-cos-prod-${parLocationSuffix}'
   properties: {
     resource: {
-      id: 'sqldb-cos-prod-${varLocationSuffix}'
+      id: 'sqldb-cos-prod-${parLocationSuffix}'
     }
     options: {
     }
@@ -60,10 +81,10 @@ resource resSqlDb 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases@2021-06-15
 
 resource resSqlContainerName 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/containers@2021-06-15' = {
   parent: resSqlDb 
-  name: 'orders-prod-${varLocationSuffix}'
+  name: 'orders-prod-${parLocationSuffix}'
   properties: {
     resource: {
-      id: 'orders-prod-${varLocationSuffix}'
+      id: 'orders-prod-${parLocationSuffix}'
       partitionKey: {
         paths: [
           '/id'
@@ -82,12 +103,12 @@ resource resPrivateDNSZone  'microsoft.network/privateDnsZones@2020-06-01' = {
 // Link the Private DNS Zone to the VNet
 resource privateDnsZoneLink 'Microsoft.Network/privateDnsZones/virtualNetworkLinks@2020-06-01' = {
     parent: resPrivateDNSZone
-    name: 'cosmos-dns-link-${varLocationSuffix}'
+    name: 'cosmos-dns-link-${parLocationSuffix}'
     location: 'global'
     properties: {
       registrationEnabled: false
       virtualNetwork: {
-        id: resHubvirtualNetwork.id
+        id: refHubvirtualNetwork.id
       }
     }
   }
@@ -96,10 +117,10 @@ resource privateDnsZoneLink 'Microsoft.Network/privateDnsZones/virtualNetworkLin
 // Private Endpoint for the Storage Account, using the main subnet
 resource resCosmosprivateEndpoint 'Microsoft.Network/privateEndpoints@2023-05-01' = {
     name: 'pe-${resCosmosDbAccount.name}'
-    location: location
+    location: parlocation
     properties: {
       subnet: {
-        id: resHubvirtualNetwork.properties.subnets[1].id
+        id: refHubvirtualNetwork.properties.subnets[1].id
       }
       privateLinkServiceConnections: [
         {
@@ -118,7 +139,7 @@ resource resCosmosprivateEndpoint 'Microsoft.Network/privateEndpoints@2023-05-01
 // This automatically creates the necessary DNS records in the Private DNS Zone
 resource resCosPEDnsGroup 'Microsoft.Network/privateEndpoints/privateDnsZoneGroups@2023-05-01' = {
     parent: resCosmosprivateEndpoint
-    name: 'pe-dnsgroup-cosmos-${varLocationSuffix}'
+    name: 'pe-dnsgroup-cosmos-${parLocationSuffix}'
     properties: {
       privateDnsZoneConfigs: [
         {
@@ -139,11 +160,6 @@ resource resCosPEDnsGroup 'Microsoft.Network/privateEndpoints/privateDnsZoneGrou
 output outCosmosAccountName string = resCosmosDbAccount.name
 output outCosmosDBName string = resSqlDb.name
 output outCosmosSQLContainerName string = resSqlContainerName.name
-output outvnethubName string = resHubvirtualNetwork.name
-output outLocationSuffix string = varLocationSuffix
 
-/******************
-* Output
-******************/
 
 
